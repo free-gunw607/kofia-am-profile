@@ -495,3 +495,44 @@ def collect_freesis_all_modes(client, metadata, ordered_keys, key_to_label, date
 
     _validate_multi_company(results, ordered_keys)
     return results
+
+
+def save_freesis_csv(results, raw_dir, ordered_keys):
+    """FreeSIS 수집 결과를 data/raw/에 CSV로 저장.
+
+    각 모드(AUM/NAV/펀드수)별로 별도 CSV 파일 생성.
+    RAW 데이터 보존을 위해 절대 기존 CSV를 덮어쓰지 않음 (检查 후 저장).
+    """
+    import csv as _csv
+    import os
+
+    os.makedirs(raw_dir, exist_ok=True)
+
+    mode_to_filename = {
+        "설정원본(AUM)": "KOFIA_FreeSIS_설정원본.csv",
+        "순자산(NAV)": "KOFIA_FreeSIS_순자산.csv",
+        "펀드수": "KOFIA_FreeSIS_펀드수.csv",
+    }
+
+    # ordered_keys에서 회사명(TMPV1)과 상태코드(TMPV98) 제외, 투자유형+합계+위탁+전일+전년만
+    tmpv_keys = [(k, label) for k, label, _ in ordered_keys if k not in ("TMPV1", "TMPV98")]
+
+    # CSV 헤더: 회사명 + 투자유형 컬럼들
+    header = ["회사명"] + [label for _, label in tmpv_keys]
+
+    for mode_label, data in results.items():
+        filename = mode_to_filename.get(mode_label)
+        if not filename:
+            continue
+        filepath = os.path.join(raw_dir, filename)
+
+        rows = data["rows"]
+        with open(filepath, "w", newline="", encoding="utf-8-sig") as f:
+            writer = _csv.writer(f)
+            writer.writerow(header)
+            for row in rows:
+                company = row.get("TMPV1", "")
+                values = [row.get(k, "") for k, _ in tmpv_keys]
+                writer.writerow([company] + values)
+
+        print(f"  CSV 저장: {filename} ({len(rows)}행)")

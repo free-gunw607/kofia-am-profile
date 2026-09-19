@@ -11,6 +11,7 @@ from .collector import (
     build_column_map,
     collect_freesis_all_modes,
     fetch_metadata,
+    save_freesis_csv,
 )
 from .joiner import build_joined_excel
 
@@ -22,7 +23,7 @@ DATA_PROCESSED = os.path.join(REPO_ROOT, "data", "processed")
 
 def cmd_run(args):
     print("=" * 60)
-    print("KOFIA 자산운용사 종합 프로파일 V3")
+    print("KOFIA 자산운용사 종합 프로파일 V4")
     print("=" * 60)
 
     date_override = getattr(args, "date", None)
@@ -49,6 +50,7 @@ def cmd_run(args):
 
     print("\n[2/4] RAW 데이터 저장...")
     os.makedirs(DATA_RAW, exist_ok=True)
+    save_freesis_csv(freesis_results, DATA_RAW, ordered_keys)
 
     print("\n[3/4] 조인 + 엑셀 생성...")
     os.makedirs(DATA_PROCESSED, exist_ok=True)
