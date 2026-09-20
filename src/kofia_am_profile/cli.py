@@ -13,7 +13,7 @@ from .collector import (
     fetch_metadata,
     save_freesis_csv,
 )
-from .joiner import build_joined_excel
+from .joiner import build_joined_excel, build_joined_excel_from_csvs
 
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -62,8 +62,23 @@ def cmd_run(args):
 
 
 def cmd_join(args):
-    print("join 명령은 V3에서 지원하지 않습니다. 'run'을 사용하세요.")
+    print("join 명령은 V4에서 지원하지 않습니다. 'run' 또는 'rebuild'을 사용하세요.")
     sys.exit(1)
+
+
+def cmd_rebuild(args):
+    print("=" * 60)
+    print("KOFIA 자산운용사 종합 프로파일 V4 - REBUILD")
+    print("=" * 60)
+
+    print("\n[1/2] CSV에서 엑셀 재생성...")
+    os.makedirs(DATA_PROCESSED, exist_ok=True)
+    output_path = os.path.join(DATA_PROCESSED, "KOFIA_자산운용사_종합프로파일.xlsx")
+    build_joined_excel_from_csvs(DATA_RAW, output_path)
+
+    print("\n[2/2] 완료!")
+    print(f"  출력: {output_path}")
+    print("  (data/raw/ CSV 원본은 변경 없음)")
 
 
 def main():
@@ -75,11 +90,15 @@ def main():
 
     sub.add_parser("join", help="더 이상 지원하지 않음")
 
+    rebuild_parser = sub.add_parser("rebuild", help="CSV에서 엑셀 재생성 (API 불필요)")
+
     args = parser.parse_args()
     if args.command == "run":
         cmd_run(args)
     elif args.command == "join":
         cmd_join(args)
+    elif args.command == "rebuild":
+        cmd_rebuild(args)
     else:
         parser.print_help()
 

@@ -95,6 +95,78 @@ def _set_tab_color(ws, color):
     ws.sheet_properties.tabColor = color
 
 
+# ── CSV 기반 엑셀 생성 ────────────────────────────────────────
+def build_joined_excel_from_csvs(raw_dir, output_path):
+    """CSV 파일에서 엑셀 조인 생성 (API 불필요, data/raw/ 읽기 전용)."""
+    import csv as _csv
+
+    def read_csv_file(filename):
+        path = os.path.join(raw_dir, filename)
+        with open(path, "r", encoding="utf-8-sig") as f:
+            return list(_csv.DictReader(f))
+
+    aum_rows = read_csv_file("KOFIA_FreeSIS_설정원본.csv")
+    nav_rows = read_csv_file("KOFIA_FreeSIS_순자산.csv")
+    fund_rows = read_csv_file("KOFIA_FreeSIS_펀드수.csv")
+
+    wb = Workbook()
+    total_rows = len(aum_rows)
+    last_row = total_rows + 1
+
+    csv_freesis_headers = [
+        "주식", "혼합주식", "혼합채권", "채권",
+        "투자계약", "재간접", "단기금융", "파생형", "부동산", "실물",
+        "특별자산", "혼합자산", "기업성장", "기관전용 사모펀드", "투자일임기타",
+        "합계", "위탁운용", "전일대비", "전년대비",
+    ]
+
+    def write_raw_from_csv(ws, rows, label):
+        for ci, h in enumerate(csv_freesis_headers, 3):
+            _apply_header(ws, 1, ci, h)
+        _apply_header(ws, 1, 1, "회사명")
+        _apply_header(ws, 1, 2, "상태코드")
+        for ri, row in enumerate(rows, 2):
+            _apply_data_cell(ws, ri, 1, row.get("회사명", ""))
+            _apply_data_cell(ws, ri, 2, "")
+            for ci, h in enumerate(csv_freesis_headers, 3):
+                val = row.get(h, "")
+                try:
+                    val = int(val)
+                except (ValueError, TypeError):
+                    pass
+                _apply_data_cell(ws, ri, ci, val, is_number=isinstance(val, (int, float)))
+        ws.column_dimensions["B"].hidden = True
+        ws.auto_filter.ref = ws.dimensions
+        ws.freeze_panes = "C2"
+        print(f"  {label}: {len(rows)} rows x {ws.max_column} cols")
+
+    ws_aum = wb.active
+    ws_aum.title = "RAW_AUM"
+    _set_tab_color(ws_aum, "A5A5A5")
+    write_raw_from_csv(ws_aum, aum_rows, "RAW_AUM")
+
+    ws_nav = wb.create_sheet("RAW_NAV")
+    _set_tab_color(ws_nav, "A5A5A5")
+    write_raw_from_csv(ws_nav, nav_rows, "RAW_NAV")
+
+    ws_fund = wb.create_sheet("RAW_펀드수")
+    _set_tab_color(ws_fund, "A5A5A5")
+    write_raw_from_csv(ws_fund, fund_rows, "RAW_펀드수")
+
+    _build_raw_members_sheet(wb, output_path)
+
+    _build_aum_sheet(wb, total_rows)
+    _build_nav_sheet(wb, total_rows)
+    _build_fund_sheet(wb, total_rows)
+    _build_summary_sheet(wb, total_rows)
+    _build_search_sheet(wb, total_rows)
+    _build_unmatched_sheet(wb, total_rows)
+
+    wb.save(output_path)
+    print(f"Saved: {output_path}")
+    return wb
+
+
 # ── 메인 진입점 ──────────────────────────────────────────────
 def build_joined_excel(freesis_results, ordered_keys, key_to_label, metadata, output_path):
     wb = Workbook()
