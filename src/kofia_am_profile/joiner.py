@@ -379,15 +379,13 @@ def _build_summary_sheet(wb, total_rows):
     for c in range(2, 4):
         ws.cell(5, c).fill = SUB_HEADER_FILL
 
-    total_col = _col_letter(RAW_TOTAL_COL)
-
     summary_items = [
         ("총 운용사 수", f'=COUNTA(AUM_투자유형별!A2:A{last_row})'),
         ("매칭 회사 수", f'=COUNTIF(AUM_투자유형별!B2:B{last_row},"매칭")'),
         ("비매칭 회사 수", f'=COUNTIF(AUM_투자유형별!B2:B{last_row},"비매칭")'),
-        ("전체 AUM 합계", f"=RAW_AUM!{total_col}{last_row}"),
-        ("전체 순자산(NAV)", f"=RAW_NAV!{total_col}{last_row}"),
-        ("전체 펀드 수", f"=RAW_펀드수!{total_col}{last_row}"),
+        ("전체 AUM 합계", f"=SUM(RAW_AUM!R2:R{last_row})"),
+        ("전체 순자산(NAV)", f"=SUM(RAW_NAV!R2:R{last_row})"),
+        ("전체 펀드 수", f"=SUM(RAW_펀드수!R2:R{last_row})"),
     ]
     for i, (label, formula) in enumerate(summary_items):
         r = 6 + i
@@ -419,7 +417,7 @@ def _build_summary_sheet(wb, total_rows):
         ws.cell(r, 2, f"=RAW_AUM!{raw_col}{last_row}").font = DATA_FONT
         ws.cell(r, 2).number_format = NUM_FMT
         ws.cell(r, 2).border = THIN_BORDER
-        ws.cell(r, 3, f"=IF(B$6=0,0,B{r}/B$6)").font = DATA_FONT
+        ws.cell(r, 3, f"=IF(B$9=0,0,B{r}/B$9)").font = DATA_FONT
         ws.cell(r, 3).number_format = "0.0%"
         ws.cell(r, 3).border = THIN_BORDER
         if r % 2 == 0:
@@ -439,15 +437,18 @@ def _build_summary_sheet(wb, total_rows):
         r = 32 + rank
         ws.cell(r, 1, rank).font = DATA_FONT
         ws.cell(r, 1).border = THIN_BORDER
-        ws.cell(r, 2, f'=IFERROR(INDEX(AUM_투자유형별!A$2:A${last_row},MATCH(LARGE(AUM_투자유형별!{total_col}$2:{total_col}${last_row},{rank}),AUM_투자유형별!{total_col}$2:{total_col}${last_row},0)),"")').font = DATA_FONT
+        aum_total_col = _col_letter(5 + len(INVEST_TYPES))
+        nav_total_col = _col_letter(3 + len(INVEST_TYPES))
+        fund_total_col = _col_letter(3 + len(INVEST_TYPES))
+        ws.cell(r, 2, f'=IFERROR(INDEX(AUM_투자유형별!A$2:A${last_row},MATCH(LARGE(AUM_투자유형별!{aum_total_col}$2:{aum_total_col}${last_row},{rank}),AUM_투자유형별!{aum_total_col}$2:{aum_total_col}${last_row},0)),"")').font = DATA_FONT
         ws.cell(r, 2).border = THIN_BORDER
-        ws.cell(r, 3, f"=IFERROR(LARGE(AUM_투자유형별!{total_col}$2:{total_col}${last_row},{rank}),0)").font = DATA_FONT
+        ws.cell(r, 3, f"=IFERROR(LARGE(AUM_투자유형별!{aum_total_col}$2:{aum_total_col}${last_row},{rank}),0)").font = DATA_FONT
         ws.cell(r, 3).number_format = NUM_FMT
         ws.cell(r, 3).border = THIN_BORDER
-        ws.cell(r, 4, f"=IFERROR(LARGE(NAV_투자유형별!{total_col}$2:{total_col}${last_row},{rank}),0)").font = DATA_FONT
+        ws.cell(r, 4, f"=IFERROR(LARGE(NAV_투자유형별!{nav_total_col}$2:{nav_total_col}${last_row},{rank}),0)").font = DATA_FONT
         ws.cell(r, 4).number_format = NUM_FMT
         ws.cell(r, 4).border = THIN_BORDER
-        ws.cell(r, 5, f"=IFERROR(LARGE(펀드수_투자유형별!{total_col}$2:{total_col}${last_row},{rank}),0)").font = DATA_FONT
+        ws.cell(r, 5, f"=IFERROR(LARGE(펀드수_투자유형별!{fund_total_col}$2:{fund_total_col}${last_row},{rank}),0)").font = DATA_FONT
         ws.cell(r, 5).number_format = NUM_FMT
         ws.cell(r, 5).border = THIN_BORDER
         if r % 2 == 0:
@@ -484,7 +485,7 @@ def _build_search_sheet(wb, total_rows):
     ws.add_data_validation(dv)
     dv.add(ws["B3"])
 
-    ws.cell(5, 1, "▼ 검색 결과 (회사명 입력 후 Enter)").font = SECTION_FONT
+    ws.cell(5, 1, "▼ 검색 결과 (회사명 입력 후 Enter, 최대 20건)").font = SECTION_FONT
     ws.cell(5, 1).fill = SUB_HEADER_FILL
     for c in range(2, 20):
         ws.cell(5, c).fill = SUB_HEADER_FILL
@@ -497,49 +498,42 @@ def _build_search_sheet(wb, total_rows):
     for col_idx, h in enumerate(result_headers, 1):
         _apply_header(ws, 6, col_idx, h)
 
-    # B2 = 회사명 검색어, B3 = 매칭여부
-    # 검색 결과는행 7부터 50행까지 (최대 50개)
-
-    # 매칭 회사의 행 번호를 찾는 공식 (AGGREGATE + ROW)
-    # AGGREGATE(15,6,ROW(A2:A521) / (조건), k) → k번째 매칭 행 번호 반환
-    # 단, AGGREGATE는 Excel 2010+ 필요 (구버전은 SMALL/IF 배열수식)
-
     aum_range = f"AUM_투자유형별!A$2:A${last_row}"
     b_range = f"AUM_투자유형별!B$2:B${last_row}"
     repm_range = f"AUM_투자유형별!C$2:C${last_row}"
     phone_range = f"AUM_투자유형별!D$2:D${last_row}"
 
-    # MATCH("*검색어*", range, 0) → 와일드카드 부분일치, 첫 번째 매칭 위치 반환
-    match_pos = f'MATCH("*"&B$2&"*",{aum_range},0)'
+    for k in range(1, 21):
+        r = 6 + k
+        match_k = f'AGGREGATE(15,6,ROW({aum_range})/(ISNUMBER(SEARCH($B$2,{aum_range}))),{k})'
 
-    # 행 7에만 첫 번째 매칭 회사 표시 (INDEX + MATCH)
-    _apply_formula_cell(ws, 7, 1, f'=IFERROR(INDEX({aum_range},{match_pos}),"")')
-    _apply_formula_cell(ws, 7, 2, f'=IFERROR(INDEX({b_range},{match_pos}),"")')
-    _apply_formula_cell(ws, 7, 3, f'=IFERROR(INDEX({repm_range},{match_pos}),"")')
-    _apply_formula_cell(ws, 7, 4, f'=IFERROR(INDEX({phone_range},{match_pos}),"")')
+        _apply_formula_cell(ws, r, 1, f'=IFERROR(INDEX({aum_range},{match_k}-1),"")')
+        _apply_formula_cell(ws, r, 2, f'=IFERROR(INDEX({b_range},{match_k}-1),"")')
+        _apply_formula_cell(ws, r, 3, f'=IFERROR(INDEX({repm_range},{match_k}-1),"")')
+        _apply_formula_cell(ws, r, 4, f'=IFERROR(INDEX({phone_range},{match_k}-1),"")')
 
-    for i in range(len(INVEST_TYPES)):
-        src_col = _col_letter(5 + i)
-        src_range = f"AUM_투자유형별!{src_col}$2:{src_col}${last_row}"
-        _apply_formula_cell(ws, 7, 5 + i,
-            f'=IFERROR(INDEX({src_range},{match_pos}),0)', is_number=True)
+        for i in range(len(INVEST_TYPES)):
+            src_col = _col_letter(5 + i)
+            src_range = f"AUM_투자유형별!{src_col}$2:{src_col}${last_row}"
+            _apply_formula_cell(ws, r, 5 + i,
+                f'=IFERROR(INDEX({src_range},{match_k}-1),0)', is_number=True)
 
-    total_src_col = _col_letter(5 + len(INVEST_TYPES))
-    _apply_formula_cell(ws, 7, 5 + len(INVEST_TYPES),
-        f'=IFERROR(INDEX(AUM_투자유형별!{total_src_col}$2:{total_src_col}${last_row},{match_pos}),0)', is_number=True, is_accent=True)
+        total_src_col = _col_letter(5 + len(INVEST_TYPES))
+        _apply_formula_cell(ws, r, 5 + len(INVEST_TYPES),
+            f'=IFERROR(INDEX(AUM_투자유형별!{total_src_col}$2:{total_src_col}${last_row},{match_k}-1),0)', is_number=True, is_accent=True)
 
-    # 행 8~56: 안내문
-    for r in range(8, 57):
+    # 행 27~56: 안내문
+    for r in range(27, 57):
         for c in range(1, 6 + len(INVEST_TYPES)):
             ws.cell(r, c).value = ""
-    ws.cell(8, 1, "※ 정확한 회사명을 입력하세요 (예: 삼성자산운용)").font = NOTE_FONT
-    ws.cell(9, 1, "  부분 검색 시 첫 번째 매칭 회사만 표시됩니다").font = NOTE_FONT
-    ws.cell(10, 1, "  전체 데이터는 RAW_AUM 시트의 필터를 이용하세요").font = NOTE_FONT
+    ws.cell(27, 1, "※ 정확한 회사명을 입력하세요 (예: 삼성자산운용)").font = NOTE_FONT
+    ws.cell(28, 1, "  부분 검색 시 포함된 회사가 모두 표시됩니다 (최대 20건)").font = NOTE_FONT
+    ws.cell(29, 1, "  전체 데이터는 RAW_AUM 시트의 필터를 이용하세요").font = NOTE_FONT
 
     widths = [28, 10, 15] + [16] * len(INVEST_TYPES) + [20]
     _set_col_widths(ws, widths)
     ws.freeze_panes = "A7"
-    print(f"  검색: created (1 row MATCH formula)")
+    print(f"  검색: created (20 rows AGGREGATE formula)")
 
 
 # ── 비매칭분석 시트 (OLD SCHOOL: INDEX/MATCH) ───────────────
